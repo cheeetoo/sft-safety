@@ -1,0 +1,82 @@
+{%- set has_tools = tools is defined and tools is not none and (tools | length) > 0 -%}
+{%- set has_system = messages|selectattr('role', 'equalto', 'system')|list|length > 0 -%}
+{%- set tool_preamble_text = 'You are provided with function signatures within <functions></functions> XML tags. You may call one or more functions to assist with the user query. Output any function calls within <function_calls></function_calls> XML tags. Do not make assumptions about what values to plug into functions.' -%}
+{%- set tool_example_text = '\nFor example, if you have access to a function get_weather(city: str) and the user asks for the weather in Paris, respond with: <function_calls>get_weather(city="Paris")</function_calls> To call multiple functions in parallel, place each call on its own line inside a single <function_calls> block. Each function call must be written on exactly ONE line: never split a call or its arguments across multiple lines, and never write a literal newline inside an argument value (use a \\n escape sequence instead). Always pass arguments as name=value keyword pairs exactly as in the example above: never pass a single JSON object as the argument, and never use XML attributes or nested XML tags for arguments. Emit exactly one <function_calls> block per response. Function results will be returned to you in a subsequent environment message.' -%}
+{%- if not has_system -%}
+    {%- if not has_tools -%}
+        {{- '<|im_start|>system\nYou are Olmo, a helpful AI assistant built by Ai2. Your date cutoff is December 2024, and your model weights are available at https://huggingface.co/allenai.<|im_end|>\n' -}}
+    {%- else -%}
+        {{- '<|im_start|>system\nYou are Olmo, a helpful AI assistant built by Ai2. Your date cutoff is December 2024, and your model weights are available at https://huggingface.co/allenai. ' -}}
+        {{- tool_preamble_text -}}
+        {{- tool_example_text -}}
+        {{- '<functions>' -}}
+        {{- tools | tojson -}}
+        {{- '</functions><|im_end|>\n' -}}
+    {%- endif -%}
+{%- endif -%}
+{%- for message in messages -%}
+    {%- if message['role'] == 'system' -%}
+        {{- '<|im_start|>system\n' + message['content'] -}}
+        {%- if has_tools -%}
+            {{- ' ' + tool_preamble_text -}}
+            {{- tool_example_text -}}
+            {{- '<functions>' -}}
+            {{- tools | tojson -}}
+            {{- '</functions>' -}}
+        {%- elif message.get('functions', none) is not none -%}
+            {{- ' <functions>' + message['functions'] + '</functions>' -}}
+        {%- else -%}
+            {{- ' You do not currently have access to any functions. <functions></functions>' -}}
+        {%- endif -%}
+        {{- '<|im_end|>\n' -}}
+    {%- elif message['role'] == 'user' -%}
+        {%- if message.get('functions', none) is not none -%}
+            {{- '<|im_start|>user\n' + message['content'] + '\n' + '<functions>' + message['functions'] + '</functions><|im_end|>\n' -}}
+        {%- else -%}
+            {{- '<|im_start|>user\n' + message['content'] + '<|im_end|>\n' -}}
+        {%- endif -%}
+    {%- elif message['role'] == 'assistant' -%}
+        {%- set is_prefill = loop.last and add_generation_prompt -%}
+        {{- '<|im_start|>assistant\n' -}}
+        {%- if is_prefill -%}
+            {{- '<think></think>' -}}
+        {%- endif -%}
+        {%- if message.get('content', none) is not none -%}
+            {{- message['content'] -}}
+        {%- endif -%}
+        {%- if message.get('function_calls', none) is not none -%}
+            {{- '<function_calls>' + message['function_calls'] + '</function_calls>' -}}
+        {%- elif message.get('tool_calls', none) is not none -%}
+            {{- '<function_calls>' -}}
+            {%- for tool_call in message['tool_calls'] -%}
+                {%- if tool_call is mapping and tool_call.get('function', none) is not none -%}
+                    {%- set args = tool_call['function']['arguments'] -%}
+                    {%- set ns = namespace(arguments_list=[]) -%}
+                    {%- for key, value in args.items() -%}
+                        {%- set ns.arguments_list = ns.arguments_list + [key ~ '=' ~ (value | tojson)] -%}
+                    {%- endfor -%}
+                    {%- set arguments = ns.arguments_list | join(', ') -%}
+                    {{- tool_call['function']['name'] + '(' + arguments + ')' -}}
+                    {%- if not loop.last -%}
+                        {{- '\n' -}}
+                    {%- endif -%}
+                {%- else -%}
+                    {{- tool_call -}}
+                {%- endif -%}
+            {%- endfor -%}
+            {{- '</function_calls>' -}}
+        {%- endif -%}
+        {%- if not loop.last -%}
+            {{- '<|im_end|>' + '\n' -}}
+        {%- elif not add_generation_prompt -%}
+            {{- eos_token -}}
+        {%- endif -%}
+    {%- elif message['role'] == 'environment' -%}
+        {{- '<|im_start|>environment\n' + message['content'] + '<|im_end|>\n' -}}
+    {%- elif message['role'] == 'tool' -%}
+        {{- '<|im_start|>environment\n' + message['content'] + '<|im_end|>\n' -}}
+    {%- endif -%}
+{%- endfor -%}
+{%- if add_generation_prompt and (messages | length == 0 or messages[-1]['role'] != 'assistant') -%}
+    {{- '<|im_start|>assistant\n<think>' -}}
+{%- endif -%}
