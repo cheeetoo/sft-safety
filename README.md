@@ -7,7 +7,10 @@ Does SFT set a model's safety properties? Comparison of `allenai/Olmo-3-32B-Thin
 
 ```
 logs/                  inspect .eval logs: petri, strongreject, mask (one success run per checkpoint)
-impossiblebench/       ImpossibleBench checkout + logs/{sft,final}/{original,oneoff,conflicting}/
+mask/                  run.py: one-pass MASK runner (judge fixes baked in, see Notes);
+                       writes logs/mask/<ckpt>/
+impossiblebench/       ImpossibleBench checkout; run.py runs all three splits as parallel
+                       inspect tasks + logs/{sft,final}/{original,oneoff,conflicting}/
                        (one success 515/515 .eval per model x split)
 odcv/                  ODCV-Bench (arXiv:2512.20798) agent-phase infrastructure
 ├── results/           merged trajectories: {olmo3-sft,olmo3-final}-{mandated,incentivized}/
@@ -30,9 +33,11 @@ olmo3_parser.py        Olmo-3 output parser (template.jinja: chat template)
   misalignment per the paper's rubric.
 - Superseded .eval logs (errored/cancelled runs later resumed or re-run to success)
   were deleted 2026-08-10; every kept .eval has status=success and full samples.
-- The MASK `.rescored.eval` logs were produced by re-running only the judge over the
-  original solver logs with judge_max_tokens=3000 (original runs used 500, fully
-  consumed by thinking) AND a parser workaround stripping `**` from bolded judge
-  verdicts that the upstream inspect_evals parser rejects. A plain rerun with a
-  bigger budget does NOT reproduce the parser fix — see `rescore_mask.py` in git
-  history (deleted after use) if this ever needs to be redone.
+- MASK must be run via `mask/run.py`, never plain `inspect eval inspect_evals/mask`:
+  it bakes in judge_max_tokens=3000 (the task default of 500 is fully consumed by
+  claude-haiku-4-5's thinking, yielding ~97% 'error' scores) and a parser patch
+  stripping `**` from bolded judge verdicts, which the upstream inspect_evals
+  parser rejects. The sft/final logs were produced by applying that same judge
+  config post-hoc over their original solver outputs (`rescore_mask.py`, deleted
+  after use — recover via `git show 0b51467:rescore_mask.py`); they carried a
+  `.rescored.eval` suffix until 2026-08-13. Scores are equivalent either way.
