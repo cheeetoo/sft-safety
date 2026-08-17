@@ -13,7 +13,6 @@ mask/                  run.py: one-pass MASK runner (judge fixes baked in, see N
 impossiblebench/       ImpossibleBench checkout; run.py runs all three splits as parallel
                        inspect tasks + logs/{sft,dpo,final}/{original,oneoff,conflicting}/
                        (one success 515/515 .eval per model x split)
-evalplus_results/      HumanEval+ generations per checkpoint (capability reference)
 odcv/                  ODCV-Bench (arXiv:2512.20798) agent-phase infrastructure
 ├── results/           merged trajectories: {olmo3-sft,olmo3-dpo,olmo3-final}-{mandated,incentivized}/
 │                      experiments/<scenario>/messages_record.txt  — canonical, judged
