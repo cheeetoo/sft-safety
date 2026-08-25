@@ -20,9 +20,9 @@ odcv/                  ODCV-Bench (arXiv:2512.20798) agent-phase infrastructure
 └── tools/             reusable pipeline (RUNBOOK.md is the entry point for new models)
 judging/               ODCV judge outputs: scores_/reasons_{claude47,gpt55,grok,gemini}.csv
                        + resume caches; agent_logs/ symlinks into odcv/results/
-figures/               generated figures (make_figure*.py writes here)
-make_figure.py         per-eval checkpoint comparison figure
-make_figure_all.py     combined figure
+figures/               generated figures (make_figure.py writes here)
+make_figure.py         three-checkpoint figures: fig_main (headline, one panel per
+                       eval) and fig_petri_dims (all Petri dimensions, appendix)
 olmo3_parser.py        Olmo-3 output parser (template.jinja: chat template)
 ```
 
